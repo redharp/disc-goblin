@@ -198,6 +198,11 @@ def rip_arguments(device: str, title_index: int, destination: Path) -> tuple[str
     )
 
 
+def makemkv_failure(messages: list[str], fallback: str) -> str:
+    tail = "\n".join(messages[-12:])
+    return f"{fallback}\n{tail}" if tail else fallback
+
+
 def fingerprint_disc(disc_name: str, titles: list[TitleInfo]) -> str:
     signature = "|".join(
         f"{title.index}:{title.duration_seconds}:{title.size_bytes}:{title.playlist}"
@@ -314,26 +319,32 @@ class MakeMKVBackend:
             raise MakeMKVError(f"{self.binary} was not found") from exc
         assert process.stdout
         messages: list[str] = []
+        log_path = destination / "makemkv.log"
         progress_pattern = re.compile(r"^PRGV:(\d+),(\d+),(\d+)")
         try:
-            async for raw_line in process.stdout:
-                line = raw_line.decode(errors="replace").rstrip()
-                messages.append(line)
-                messages = messages[-30:]
-                match = progress_pattern.match(line)
-                if match:
-                    current, total, maximum = (int(value) for value in match.groups())
-                    denominator = maximum or total or 1
-                    await progress(min(1.0, current / denominator), "Ripping title")
+            with log_path.open("w", encoding="utf-8", buffering=1) as output_log:
+                async for raw_line in process.stdout:
+                    line = raw_line.decode(errors="replace").rstrip()
+                    output_log.write(f"{line}\n")
+                    messages.append(line)
+                    messages = messages[-30:]
+                    match = progress_pattern.match(line)
+                    if match:
+                        current, total, maximum = (int(value) for value in match.groups())
+                        denominator = maximum or total or 1
+                        await progress(min(1.0, current / denominator), "Ripping title")
             return_code = await process.wait()
         except asyncio.CancelledError:
             await stop_process(process)
             raise
         if return_code:
-            raise MakeMKVError("\n".join(messages[-12:]) or "MakeMKV rip failed")
+            raise MakeMKVError(makemkv_failure(messages, "MakeMKV rip failed"))
         created = list(set(destination.glob("*.mkv")) - before)
         if not created:
-            raise MakeMKVError("MakeMKV finished but no MKV file was created")
+            raise MakeMKVError(
+                makemkv_failure(messages, "MakeMKV finished but no MKV file was created")
+            )
+        log_path.unlink(missing_ok=True)
         return max(created, key=lambda path: path.stat().st_mtime)
 
     async def eject(self, device: str) -> None:

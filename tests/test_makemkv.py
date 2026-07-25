@@ -1,6 +1,7 @@
 from disc_goblin.makemkv import (
     choose_titles,
     fingerprint_disc,
+    makemkv_failure,
     parse_drives,
     parse_titles,
     rip_arguments,
@@ -85,3 +86,10 @@ def test_rip_uses_same_unfiltered_title_indexes_as_scan(tmp_path) -> None:
     arguments = rip_arguments("/dev/sr0", 20, tmp_path)
     assert "--minlength=0" in arguments
     assert arguments[-4:] == ("mkv", "dev:/dev/sr0", "20", str(tmp_path))
+
+
+def test_makemkv_failure_keeps_the_actionable_tail() -> None:
+    messages = [f"line {index}" for index in range(20)]
+    failure = makemkv_failure(messages, "No MKV was created")
+    assert failure.startswith("No MKV was created\nline 8")
+    assert failure.endswith("line 19")
