@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import Body, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -33,6 +34,10 @@ class MetadataUpdate(BaseModel):
 
 class FirmwareFlashRequest(BaseModel):
     confirmation: str
+
+
+def websocket_payload(snapshot: dict[str, Any]) -> dict[str, Any]:
+    return jsonable_encoder(snapshot)
 
 
 def create_app(
@@ -189,7 +194,7 @@ def create_app(
         await websocket.accept()
         try:
             async for snapshot in service.subscribe():
-                await websocket.send_json(snapshot)
+                await websocket.send_json(websocket_payload(snapshot))
         except WebSocketDisconnect:
             return
 
