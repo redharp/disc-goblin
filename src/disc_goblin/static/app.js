@@ -97,6 +97,13 @@ function badge(status) {
   return `<span class="status-pill ${escapeHtml(status)}">${escapeHtml(humanStatus(status))}</span>`;
 }
 
+function connectedOverview(data) {
+  return {
+    ...data,
+    drives: data.drives.filter((drive) => drive.online !== false),
+  };
+}
+
 function renderMetrics(data) {
   const reviewing = data.active_jobs.filter((job) => job.status === "needs_review").length;
   const working = data.active_jobs.filter((job) => job.status !== "needs_review").length;
@@ -320,11 +327,12 @@ function renderHistory(data) {
 }
 
 function render(data) {
-  appState.overview = data;
-  renderMetrics(data);
-  renderDrives(data);
-  renderQueue(data);
-  renderHistory(data);
+  const connected = connectedOverview(data);
+  appState.overview = connected;
+  renderMetrics(connected);
+  renderDrives(connected);
+  renderQueue(connected);
+  renderHistory(connected);
   scheduleActivityHydration();
 }
 
