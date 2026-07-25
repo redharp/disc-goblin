@@ -184,6 +184,20 @@ def successful_title_scan(output: str) -> bool:
     return "Operation successfully completed" in output and bool(parse_titles(output))
 
 
+def rip_arguments(device: str, title_index: int, destination: Path) -> tuple[str, ...]:
+    return (
+        "--robot",
+        "--cache=1024",
+        "--decrypt",
+        "--minlength=0",
+        "--noscan",
+        "mkv",
+        f"dev:{device}",
+        str(title_index),
+        str(destination),
+    )
+
+
 def fingerprint_disc(disc_name: str, titles: list[TitleInfo]) -> str:
     signature = "|".join(
         f"{title.index}:{title.duration_seconds}:{title.size_bytes}:{title.playlist}"
@@ -291,14 +305,7 @@ class MakeMKVBackend:
         try:
             process = await asyncio.create_subprocess_exec(
                 self.binary,
-                "--robot",
-                "--cache=1024",
-                "--decrypt",
-                "--noscan",
-                "mkv",
-                f"dev:{device}",
-                str(title_index),
-                str(destination),
+                *rip_arguments(device, title_index, destination),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
                 **process_group_options(),

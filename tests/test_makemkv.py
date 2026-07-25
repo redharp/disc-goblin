@@ -3,6 +3,7 @@ from disc_goblin.makemkv import (
     fingerprint_disc,
     parse_drives,
     parse_titles,
+    rip_arguments,
     successful_title_scan,
 )
 
@@ -78,3 +79,9 @@ def test_successful_title_scan_requires_completion_and_title_data() -> None:
     assert successful_title_scan(SUCCESSFUL_SCAN_WITH_WARNINGS) is True
     assert successful_title_scan('MSG:5011,0,0,"Operation successfully completed"') is False
     assert successful_title_scan('TINFO:0,2,0,"MainFeature"') is False
+
+
+def test_rip_uses_same_unfiltered_title_indexes_as_scan(tmp_path) -> None:
+    arguments = rip_arguments("/dev/sr0", 20, tmp_path)
+    assert "--minlength=0" in arguments
+    assert arguments[-4:] == ("mkv", "dev:/dev/sr0", "20", str(tmp_path))
