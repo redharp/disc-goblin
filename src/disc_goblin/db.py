@@ -21,6 +21,8 @@ from sqlalchemy import (
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
+ACTIVE_JOB_STATUS_SQL = "status IN ('scanning','queued','ripping','publishing')"
+
 
 def now_iso() -> datetime:
     return datetime.now(UTC)
@@ -60,6 +62,13 @@ class Job(Base):
         Index("jobs_created_idx", "created_at"),
         Index("jobs_drive_status_idx", "drive_id", "status"),
         Index("jobs_fingerprint_idx", "fingerprint"),
+        Index(
+            "jobs_one_active_per_drive_idx",
+            "drive_id",
+            unique=True,
+            postgresql_where=text(ACTIVE_JOB_STATUS_SQL),
+            sqlite_where=text(ACTIVE_JOB_STATUS_SQL),
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)

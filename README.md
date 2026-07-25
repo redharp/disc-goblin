@@ -17,6 +17,8 @@ metadata directly into the library.
 - Multiple concurrently connected Blu-ray/DVD drives.
 - Linux udev hotplug discovery reconciled against MakeMKV's own drive indexes,
   with polling as a fallback.
+- Stable `/dev/sr*` targeting plus MakeMKV `--noscan` isolation, so each drive
+  can scan or rip without probing and pausing the others.
 - Smart title selection:
   - longest title for a normal movie disc;
   - similarly sized episode titles for an episodic disc;
@@ -41,7 +43,9 @@ metadata directly into the library.
 - Manifest-gated firmware flashing with exact hardware matching, SHA-256
   verification, empty-tray/idle checks, explicit confirmation, and post-flash
   version verification.
-- Per-title details, progress, errors, retry, cancel, and eject.
+- Per-title details, progress, errors, retry, cancel, and guarded tray controls.
+- Clickable live job inspector and event feed with resilient WebSocket
+  reconnect and polling fallback.
 - Collision protection: an existing library file is never overwritten.
 - Disc fingerprinting and a duplicate-completion warning.
 - Responsive real-time dashboard over WebSockets.

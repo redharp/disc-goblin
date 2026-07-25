@@ -5,6 +5,28 @@ import os
 from collections.abc import AsyncIterator
 
 
+def optical_media_labels() -> dict[str, str]:
+    """Return loaded optical media labels keyed by /dev/sr* device path."""
+    if os.name == "nt":
+        return {}
+
+    try:
+        import pyudev
+    except ImportError:
+        return {}
+
+    labels: dict[str, str] = {}
+    context = pyudev.Context()
+    for device in context.list_devices(subsystem="block"):
+        name = device.device_node or ""
+        if not name.startswith("/dev/sr"):
+            continue
+        label = str(device.get("ID_FS_LABEL", "")).strip()
+        if label:
+            labels[name] = label
+    return labels
+
+
 async def optical_hotplug_events() -> AsyncIterator[str]:
     """Yield Linux optical-device events; quietly idle on unsupported platforms."""
     if os.name == "nt":

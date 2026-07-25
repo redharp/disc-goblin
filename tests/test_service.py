@@ -53,3 +53,75 @@ async def test_simulated_disc_rips_then_waits_for_safe_publish(tmp_path: Path) -
     assert published["status"] == "complete"
     destination = settings.movie_root / "Dune Part Two (2024)" / "Dune Part Two (2024).mkv"
     assert destination.is_file()
+
+
+@pytest.mark.asyncio
+async def test_open_tray_refuses_active_drive(tmp_path: Path) -> None:
+    settings = Settings(
+        library_root=tmp_path / "library",
+        movie_root=tmp_path / "library" / "Movies",
+        tv_root=tmp_path / "library" / "TV",
+        database_url=f"sqlite:///{tmp_path / 'service.db'}",
+        eject_on_success=False,
+        udev_discovery=False,
+        firmware_audit=False,
+        simulate=True,
+    )
+    database = Database(settings.database_url)
+    database.initialize()
+    database.upsert_drive(
+        {
+            "id": "drive-demo-pioneer",
+            "disc_index": 0,
+            "name": "Pioneer",
+            "device": "/dev/sr0",
+            "disc_name": "MOVIE",
+            "state": "ripping",
+            "status_text": "Ripping",
+        }
+    )
+    database.create_job(
+        {
+            "id": "job-active",
+            "drive_id": "drive-demo-pioneer",
+            "disc_name": "MOVIE",
+            "fingerprint": "active",
+            "title": "Movie",
+            "status": "ripping",
+        }
+    )
+    service = RipperService(settings, database, SimulationBackend())
+
+    with pytest.raises(ValueError, match="active ingest"):
+        await service.eject_drive("drive-demo-pioneer")
+
+
+@pytest.mark.asyncio
+async def test_queue_drive_reuses_existing_active_job(tmp_path: Path) -> None:
+    settings = Settings(
+        library_root=tmp_path / "library",
+        movie_root=tmp_path / "library" / "Movies",
+        tv_root=tmp_path / "library" / "TV",
+        database_url=f"sqlite:///{tmp_path / 'service.db'}",
+        udev_discovery=False,
+        firmware_audit=False,
+        simulate=True,
+    )
+    database = Database(settings.database_url)
+    database.initialize()
+    drive = (await SimulationBackend().list_drives())[0]
+    database.upsert_drive(drive.to_dict())
+    database.create_job(
+        {
+            "id": "job-active",
+            "drive_id": drive.id,
+            "disc_name": drive.disc_name,
+            "fingerprint": "active",
+            "title": drive.disc_name,
+            "status": "scanning",
+        }
+    )
+    service = RipperService(settings, database, SimulationBackend())
+
+    assert service.queue_drive(drive) == "job-active"
+    assert database.fetchone("SELECT COUNT(*) AS count FROM jobs") == {"count": 1}

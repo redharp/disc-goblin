@@ -5,6 +5,7 @@ import csv
 import hashlib
 import os
 import re
+import signal
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -13,6 +14,34 @@ from typing import Protocol
 from .firmware import FirmwareInfo, FlashProfile, parse_firmware_info
 
 ProgressCallback = Callable[[float, str], Awaitable[None]]
+
+
+async def stop_process(process: asyncio.subprocess.Process) -> None:
+    """Terminate a child process and escalate to kill if it does not exit."""
+    if process.returncode is not None:
+        return
+    try:
+        if os.name == "nt":
+            process.terminate()
+        else:
+            os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    try:
+        await asyncio.wait_for(process.wait(), timeout=5)
+    except TimeoutError:
+        try:
+            if os.name == "nt":
+                process.kill()
+            else:
+                os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            return
+        await process.wait()
+
+
+def process_group_options() -> dict[str, bool]:
+    return {"start_new_session": True} if os.name != "nt" else {}
 
 
 @dataclass(slots=True)
@@ -51,11 +80,11 @@ class MakeMKVError(RuntimeError):
 class RipperBackend(Protocol):
     async def list_drives(self) -> list[DriveInfo]: ...
 
-    async def scan_disc(self, disc_index: int) -> list[TitleInfo]: ...
+    async def scan_disc(self, device: str) -> list[TitleInfo]: ...
 
     async def rip_title(
         self,
-        disc_index: int,
+        device: str,
         title_index: int,
         destination: Path,
         progress: ProgressCallback,
@@ -206,10 +235,15 @@ class MakeMKVBackend:
                 *arguments,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
+                **process_group_options(),
             )
         except FileNotFoundError as exc:
             raise MakeMKVError(f"{self.binary} was not found") from exc
-        stdout, _ = await process.communicate()
+        try:
+            stdout, _ = await process.communicate()
+        except asyncio.CancelledError:
+            await stop_process(process)
+            raise
         output = stdout.decode(errors="replace")
         if process.returncode and not allow_failure:
             tail = "\n".join(output.splitlines()[-12:])
@@ -218,23 +252,24 @@ class MakeMKVBackend:
 
     async def list_drives(self) -> list[DriveInfo]:
         output = await self._capture(
-            "--robot", "--cache=1", "info", "disc:9999", allow_failure=True
+            "--robot", "--cache=1", "--noscan", "info", "disc:9999", allow_failure=True
         )
         return parse_drives(output)
 
-    async def scan_disc(self, disc_index: int) -> list[TitleInfo]:
+    async def scan_disc(self, device: str) -> list[TitleInfo]:
         output = await self._capture(
             "--robot",
             "--cache=1",
             "--minlength=0",
+            "--noscan",
             "info",
-            f"disc:{disc_index}",
+            f"dev:{device}",
         )
         return parse_titles(output)
 
     async def rip_title(
         self,
-        disc_index: int,
+        device: str,
         title_index: int,
         destination: Path,
         progress: ProgressCallback,
@@ -249,27 +284,32 @@ class MakeMKVBackend:
                 "--decrypt",
                 "--noscan",
                 "mkv",
-                f"disc:{disc_index}",
+                f"dev:{device}",
                 str(title_index),
                 str(destination),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
+                **process_group_options(),
             )
         except FileNotFoundError as exc:
             raise MakeMKVError(f"{self.binary} was not found") from exc
         assert process.stdout
         messages: list[str] = []
         progress_pattern = re.compile(r"^PRGV:(\d+),(\d+),(\d+)")
-        async for raw_line in process.stdout:
-            line = raw_line.decode(errors="replace").rstrip()
-            messages.append(line)
-            messages = messages[-30:]
-            match = progress_pattern.match(line)
-            if match:
-                current, total, maximum = (int(value) for value in match.groups())
-                denominator = maximum or total or 1
-                await progress(min(1.0, current / denominator), "Ripping title")
-        return_code = await process.wait()
+        try:
+            async for raw_line in process.stdout:
+                line = raw_line.decode(errors="replace").rstrip()
+                messages.append(line)
+                messages = messages[-30:]
+                match = progress_pattern.match(line)
+                if match:
+                    current, total, maximum = (int(value) for value in match.groups())
+                    denominator = maximum or total or 1
+                    await progress(min(1.0, current / denominator), "Ripping title")
+            return_code = await process.wait()
+        except asyncio.CancelledError:
+            await stop_process(process)
+            raise
         if return_code:
             raise MakeMKVError("\n".join(messages[-12:]) or "MakeMKV rip failed")
         created = list(set(destination.glob("*.mkv")) - before)
@@ -286,7 +326,9 @@ class MakeMKVBackend:
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.DEVNULL,
         )
-        await process.wait()
+        return_code = await process.wait()
+        if return_code:
+            raise MakeMKVError(f"Unable to open the tray for {device}")
 
     async def firmware_info(self, device: str) -> FirmwareInfo:
         arguments = ["f"]
@@ -336,10 +378,15 @@ class MakeMKVBackend:
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
+                **process_group_options(),
             )
         except FileNotFoundError as exc:
             raise MakeMKVError(f"{self.binary} was not found") from exc
-        stdout, _ = await process.communicate(b"yes\n")
+        try:
+            stdout, _ = await process.communicate(b"yes\n")
+        except asyncio.CancelledError:
+            await stop_process(process)
+            raise
         output = stdout.decode(errors="replace")
         if process.returncode or "Done successfully" not in output:
             raise MakeMKVError("\n".join(output.splitlines()[-20:]))
@@ -372,7 +419,7 @@ class SimulationBackend:
             ),
         ]
 
-    async def scan_disc(self, disc_index: int) -> list[TitleInfo]:
+    async def scan_disc(self, device: str) -> list[TitleInfo]:
         await asyncio.sleep(0.8)
         return [
             TitleInfo(
@@ -397,7 +444,7 @@ class SimulationBackend:
 
     async def rip_title(
         self,
-        disc_index: int,
+        device: str,
         title_index: int,
         destination: Path,
         progress: ProgressCallback,

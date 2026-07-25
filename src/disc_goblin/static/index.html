@@ -107,6 +107,21 @@
         <div id="queue" class="queue" aria-live="polite"></div>
       </section>
 
+      <section class="section activity-section" aria-labelledby="activity-heading">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">ACTIVITY WIRE</p>
+            <h2 id="activity-heading">Live activity</h2>
+          </div>
+          <span id="activity-note" class="section-note">Waiting for job telemetry…</span>
+        </div>
+        <div class="activity-panel">
+          <ol id="activity-log" class="activity-log" aria-live="polite" aria-relevant="additions">
+            <li class="activity-empty">No job activity yet.</li>
+          </ol>
+        </div>
+      </section>
+
       <section class="section history-section" aria-labelledby="history-heading">
         <div class="section-heading">
           <div>
@@ -137,6 +152,21 @@
       <span>DISC GOBLIN / MAKE IT MKV. KEEP IT CLEAN.</span>
       <span id="footer-library">Library path loading…</span>
     </footer>
+
+    <dialog id="job-dialog" class="job-dialog">
+      <div class="job-dialog-shell">
+        <div class="dialog-head">
+          <div>
+            <p class="eyebrow">JOB INSPECTOR</p>
+            <h2 id="job-dialog-title">Ingest details</h2>
+          </div>
+          <button class="icon-button" data-action="close-job" aria-label="Close job details">×</button>
+        </div>
+        <div id="job-dialog-body" class="job-dialog-body">
+          <p class="dialog-copy">Loading job telemetry…</p>
+        </div>
+      </div>
+    </dialog>
 
     <dialog id="review-dialog">
       <form id="review-form" method="dialog">

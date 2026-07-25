@@ -143,8 +143,20 @@ button {
   background: var(--acid);
 }
 
+.connection.syncing i {
+  background: var(--orange);
+  animation: connection-pulse 1.2s ease-in-out infinite;
+}
+
 .connection.offline i {
   background: var(--red);
+}
+
+@keyframes connection-pulse {
+  50% {
+    opacity: 0.35;
+    transform: scale(0.72);
+  }
 }
 
 .button {
@@ -172,6 +184,8 @@ button {
 
 .button:focus-visible,
 .icon-button:focus-visible,
+.mini-button:focus-visible,
+.activity-item:focus-visible,
 input:focus-visible {
   outline: 2px solid var(--acid);
   outline-offset: 3px;
@@ -676,6 +690,40 @@ h2 {
   grid-template-columns: 1.3fr minmax(180px, 0.7fr) auto;
   align-items: center;
   gap: 28px;
+  cursor: pointer;
+  transition:
+    border-color 180ms ease,
+    background 180ms ease,
+    transform 180ms ease;
+}
+
+.job-card:hover {
+  border-color: rgba(238, 241, 232, 0.24);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.045), transparent 45%),
+    var(--panel);
+  transform: translateY(-1px);
+}
+
+.job-card.working::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 2px;
+  background: linear-gradient(180deg, transparent, var(--acid), transparent);
+  animation: live-scan 2.4s ease-in-out infinite;
+}
+
+@keyframes live-scan {
+  0%,
+  100% {
+    opacity: 0.2;
+    transform: translateY(-55%);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(55%);
+  }
 }
 
 .job-card.review {
@@ -729,9 +777,111 @@ h2 {
   transition: width 280ms ease;
 }
 
+.progress-track.indeterminate span {
+  width: 34%;
+  animation: indeterminate-progress 1.4s ease-in-out infinite;
+}
+
+@keyframes indeterminate-progress {
+  from {
+    transform: translateX(-110%);
+  }
+  to {
+    transform: translateX(310%);
+  }
+}
+
 .job-actions {
   display: flex;
   gap: 8px;
+}
+
+.activity-section {
+  padding-top: 54px;
+}
+
+.activity-panel {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+.activity-log {
+  max-height: 390px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.activity-log li + li {
+  border-top: 1px solid rgba(238, 241, 232, 0.065);
+}
+
+.activity-item {
+  width: 100%;
+  padding: 15px 18px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 13px;
+  color: var(--ink);
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.activity-item:hover {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.activity-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--cyan);
+  box-shadow: 0 0 12px rgba(101, 230, 218, 0.32);
+}
+
+.activity-item.warning .activity-dot {
+  background: var(--orange);
+  box-shadow: 0 0 12px rgba(255, 154, 85, 0.32);
+}
+
+.activity-item.error .activity-dot {
+  background: var(--red);
+  box-shadow: 0 0 12px rgba(255, 107, 104, 0.32);
+}
+
+.activity-copy {
+  min-width: 0;
+}
+
+.activity-copy strong,
+.activity-copy small {
+  display: block;
+}
+
+.activity-copy strong {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activity-copy small {
+  margin-top: 4px;
+  color: var(--dim);
+  font: 400 9px/1.4 "DM Mono", monospace;
+}
+
+.activity-empty {
+  padding: 28px;
+  color: var(--muted);
+  font: 400 10px/1.5 "DM Mono", monospace;
+  text-align: center;
 }
 
 .empty-state {
@@ -846,6 +996,152 @@ dialog {
 dialog::backdrop {
   background: rgba(3, 5, 6, 0.78);
   backdrop-filter: blur(10px);
+}
+
+.job-dialog {
+  width: min(920px, calc(100% - 32px));
+}
+
+.job-dialog-shell {
+  padding: 30px;
+}
+
+.job-dialog-body {
+  margin-top: 24px;
+}
+
+.job-detail-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+.job-detail-summary > div {
+  min-width: 0;
+  padding: 18px;
+  border-right: 1px solid var(--line);
+}
+
+.job-detail-summary > div:last-child {
+  border-right: 0;
+}
+
+.job-detail-summary span,
+.job-detail-summary strong,
+.job-detail-summary small {
+  display: block;
+}
+
+.job-detail-summary > div > span {
+  color: var(--dim);
+  font: 500 8px/1 "DM Mono", monospace;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.job-detail-summary strong {
+  margin-top: 12px;
+  overflow: hidden;
+  font-size: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.job-detail-summary small {
+  margin-top: 5px;
+  overflow: hidden;
+  color: var(--muted);
+  font: 400 9px/1.4 "DM Mono", monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.job-detail-summary .status-pill + strong {
+  margin-top: 12px;
+}
+
+.job-detail-progress {
+  padding: 18px 0 8px;
+}
+
+.job-detail-grid {
+  display: grid;
+  grid-template-columns: 0.9fr 1.1fr;
+  gap: 14px;
+}
+
+.job-detail-grid section {
+  min-width: 0;
+}
+
+.job-detail-grid h3 {
+  margin: 12px 0 9px;
+  color: var(--muted);
+  font: 500 9px/1 "DM Mono", monospace;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.detail-list {
+  max-height: 300px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.14);
+}
+
+.detail-list > div {
+  padding: 12px 13px;
+  border-bottom: 1px solid var(--line);
+}
+
+.detail-list > div:last-child {
+  border-bottom: 0;
+}
+
+.detail-list strong,
+.detail-list small {
+  display: block;
+}
+
+.detail-list strong {
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail-list small {
+  margin-top: 4px;
+  color: var(--dim);
+  font: 400 9px/1.4 "DM Mono", monospace;
+}
+
+.detail-event.warning {
+  box-shadow: inset 2px 0 var(--orange);
+}
+
+.detail-event.error {
+  box-shadow: inset 2px 0 var(--red);
+}
+
+.detail-empty {
+  margin: 0;
+  padding: 24px 16px;
+  color: var(--dim);
+  font: 400 10px/1.5 "DM Mono", monospace;
+  text-align: center;
+}
+
+.job-detail-error {
+  margin: 14px 0 0;
+  padding: 12px 14px;
+  color: var(--red);
+  border: 1px solid rgba(255, 107, 104, 0.2);
+  border-radius: 10px;
+  background: rgba(255, 107, 104, 0.05);
+  font-size: 11px;
 }
 
 #review-form {
@@ -1186,6 +1482,21 @@ dialog::backdrop {
 
   .job-actions {
     justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .job-detail-summary,
+  .job-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .job-detail-summary > div {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .job-detail-summary > div:last-child {
+    border-bottom: 0;
   }
 
   th:nth-child(2),

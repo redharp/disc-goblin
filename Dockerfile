@@ -10,6 +10,7 @@ COPY --from=makemkv /opt/makemkv /opt/makemkv
 
 RUN apk add --no-cache \
       eudev-libs \
+      openjdk21-jre-headless \
       util-linux-misc \
     && mkdir -p /opt/makemkv/appdata \
     && tar -xf /opt/makemkv/share/MakeMKV/appdata.tar -C /opt/makemkv/appdata \

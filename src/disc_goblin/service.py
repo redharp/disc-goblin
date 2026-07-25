@@ -10,7 +10,7 @@ from typing import Any
 
 from .config import Settings
 from .db import Database, now_iso
-from .discovery import optical_hotplug_events
+from .discovery import optical_hotplug_events, optical_media_labels
 from .firmware import FirmwareInfo, FirmwareManifest
 from .makemkv import (
     DriveInfo,
@@ -50,9 +50,35 @@ class RipperService:
         self._subscribers: set[asyncio.Queue[dict[str, Any]]] = set()
         self._semaphore = asyncio.Semaphore(settings.max_concurrent_rips)
         self._poll_lock = asyncio.Lock()
+        self._drive_locks: dict[str, asyncio.Lock] = {}
+
+    def _drive_lock(self, drive_id: str) -> asyncio.Lock:
+        return self._drive_locks.setdefault(drive_id, asyncio.Lock())
+
+    def _track_task(self, job_id: str, task: asyncio.Task[None]) -> None:
+        self._tasks[job_id] = task
+
+        def forget(completed: asyncio.Task[None]) -> None:
+            if self._tasks.get(job_id) is completed:
+                self._tasks.pop(job_id, None)
+
+        task.add_done_callback(forget)
 
     async def start(self) -> None:
         self.database.initialize()
+        recovered = self.database.execute(
+            """
+            UPDATE jobs
+            SET status='failed', error='Interrupted by service restart', completed_at=?
+            WHERE status IN ('scanning','queued','ripping','publishing')
+            """,
+            (now_iso(),),
+        )
+        if recovered:
+            self.database.add_event(
+                f"Recovered {recovered} interrupted ingest job{'s' if recovered != 1 else ''}",
+                level="warning",
+            )
         self.settings.library_root.mkdir(parents=True, exist_ok=True)
         self.settings.movie_root.mkdir(parents=True, exist_ok=True)
         self.settings.tv_root.mkdir(parents=True, exist_ok=True)
@@ -95,6 +121,16 @@ class RipperService:
     async def poll_once(self) -> None:
         async with self._poll_lock:
             drives = await self.backend.list_drives()
+            media_labels = (
+                await asyncio.to_thread(optical_media_labels)
+                if self.settings.udev_discovery
+                else {}
+            )
+            for drive in drives:
+                if not drive.disc_name and media_labels.get(drive.device):
+                    drive.disc_name = media_labels[drive.device]
+                    drive.state = "ready"
+                    drive.status_text = "Disc ready"
             present_ids = {drive.id for drive in drives}
             self._seen_drives.intersection_update(present_ids)
             self._firmware_audited.intersection_update(present_ids)
@@ -286,6 +322,17 @@ class RipperService:
             raise
 
     def queue_drive(self, drive: DriveInfo) -> str:
+        active = self.database.fetchone(
+            """
+            SELECT id FROM jobs
+            WHERE drive_id=? AND status IN ('scanning','queued','ripping','publishing')
+            ORDER BY created_at DESC LIMIT 1
+            """,
+            (drive.id,),
+        )
+        if active:
+            self._seen_drives.add(drive.id)
+            return str(active["id"])
         job_id = uuid.uuid4().hex
         provisional = f"{drive.id}:{drive.disc_name}"
         self.database.create_job(
@@ -302,14 +349,17 @@ class RipperService:
         self.database.add_event(
             f"Detected {drive.disc_name}", job_id=job_id, details={"drive": drive.name}
         )
-        task = asyncio.create_task(self._process_job(job_id, drive), name=f"rip-{job_id}")
-        self._tasks[job_id] = task
-        task.add_done_callback(lambda _: self._tasks.pop(job_id, None))
+        task = asyncio.create_task(self._run_job(job_id, drive), name=f"rip-{job_id}")
+        self._track_task(job_id, task)
         return job_id
+
+    async def _run_job(self, job_id: str, drive: DriveInfo) -> None:
+        async with self._drive_lock(drive.id):
+            await self._process_job(job_id, drive)
 
     async def _process_job(self, job_id: str, drive: DriveInfo) -> None:
         try:
-            titles = await self.backend.scan_disc(drive.disc_index)
+            titles = await self.backend.scan_disc(drive.device)
             if not titles:
                 raise MakeMKVError("MakeMKV found no usable titles on the disc")
             fingerprint = fingerprint_disc(drive.disc_name, titles)
@@ -368,12 +418,22 @@ class RipperService:
             async with self._semaphore:
                 await self._rip(job_id, drive, selected)
         except asyncio.CancelledError:
-            self.database.update_job(job_id, status="cancelled", error="Cancelled")
+            self.database.update_job(
+                job_id,
+                status="cancelled",
+                error="Cancelled",
+                completed_at=now_iso(),
+            )
             self.database.add_event("Job cancelled", job_id=job_id, level="warning")
             await self.broadcast()
             raise
         except Exception as exc:
-            self.database.update_job(job_id, status="failed", error=str(exc))
+            self.database.update_job(
+                job_id,
+                status="failed",
+                error=str(exc),
+                completed_at=now_iso(),
+            )
             self.database.add_event(str(exc), job_id=job_id, level="error")
             await self.broadcast()
 
@@ -395,7 +455,7 @@ class RipperService:
                 self.database.update_job(job_id, progress=round(overall, 4))
                 await self.broadcast()
 
-            output = await self.backend.rip_title(drive.disc_index, title.index, stage, report)
+            output = await self.backend.rip_title(drive.device, title.index, stage, report)
             self.database.execute(
                 "UPDATE titles SET ripped_path=? WHERE job_id=? AND title_index=?",
                 (str(output), job_id, title.index),
@@ -540,6 +600,21 @@ class RipperService:
         job = self.database.job_detail(job_id)
         if not job:
             raise KeyError(job_id)
+        if job["status"] not in {"failed", "cancelled"}:
+            raise ValueError("Only failed or cancelled jobs can be retried")
+        if job_id in self._tasks:
+            raise ValueError("Job is already running")
+        active = self.database.fetchone(
+            """
+            SELECT id FROM jobs
+            WHERE drive_id=? AND id<>?
+              AND status IN ('scanning','queued','ripping','publishing')
+            LIMIT 1
+            """,
+            (job["drive_id"], job_id),
+        )
+        if active:
+            raise ValueError("The drive already has an active ingest job")
         drive_row = self.database.fetchone("SELECT * FROM drives WHERE id=?", (job["drive_id"],))
         if not drive_row or not drive_row["disc_name"]:
             raise ValueError("Insert the original disc before retrying this job")
@@ -566,23 +641,92 @@ class RipperService:
             )
             for row in selected_rows
         ]
-        task = asyncio.create_task(self._rip(job_id, drive, selected), name=f"retry-{job_id}")
-        self._tasks[job_id] = task
-        task.add_done_callback(lambda _: self._tasks.pop(job_id, None))
+        if not selected:
+            raise ValueError("This job has no selected titles to retry")
+        self.database.update_job(
+            job_id,
+            status="queued",
+            progress=0,
+            error="",
+            completed_at=None,
+        )
+        task = asyncio.create_task(
+            self._run_retry(job_id, drive, selected),
+            name=f"retry-{job_id}",
+        )
+        self._track_task(job_id, task)
+
+    async def _run_retry(
+        self,
+        job_id: str,
+        drive: DriveInfo,
+        selected: list[TitleInfo],
+    ) -> None:
+        try:
+            async with self._drive_lock(drive.id), self._semaphore:
+                await self._rip(job_id, drive, selected)
+        except asyncio.CancelledError:
+            self.database.update_job(
+                job_id,
+                status="cancelled",
+                error="Cancelled",
+                completed_at=now_iso(),
+            )
+            self.database.add_event("Job cancelled", job_id=job_id, level="warning")
+            await self.broadcast()
+            raise
+        except Exception as exc:
+            self.database.update_job(
+                job_id,
+                status="failed",
+                error=str(exc),
+                completed_at=now_iso(),
+            )
+            self.database.add_event(str(exc), job_id=job_id, level="error")
+            await self.broadcast()
 
     async def cancel_job(self, job_id: str) -> None:
         task = self._tasks.get(job_id)
-        if not task:
+        if task:
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
+            return
+        job = self.database.job_detail(job_id)
+        if not job:
+            raise KeyError(job_id)
+        if job["status"] not in ACTIVE_STATUSES:
             raise ValueError("Job is not currently running")
-        task.cancel()
+        self.database.update_job(
+            job_id,
+            status="cancelled",
+            error="Cancelled",
+            completed_at=now_iso(),
+        )
+        self.database.add_event("Job cancelled", job_id=job_id, level="warning")
+        await self.broadcast()
 
     async def eject_drive(self, drive_id: str) -> None:
         drive = self.database.fetchone("SELECT * FROM drives WHERE id=?", (drive_id,))
         if not drive:
             raise KeyError(drive_id)
-        await self.backend.eject(drive["device"])
+        lock = self._drive_lock(drive_id)
+        if lock.locked():
+            raise ValueError("The drive has an active operation")
+        async with lock:
+            active = self.database.fetchone(
+                """
+                SELECT id FROM jobs
+                WHERE drive_id=? AND status IN ('scanning','queued','ripping','publishing')
+                LIMIT 1
+                """,
+                (drive_id,),
+            )
+            if active:
+                raise ValueError("The drive has an active ingest job")
+            await self.backend.eject(drive["device"])
         self._seen_drives.discard(drive_id)
-        self.database.add_event(f"Ejected {drive['name']}")
+        self.database.add_event(f"Opened tray for {drive['name']}")
         await self.broadcast()
 
     async def broadcast(self) -> None:

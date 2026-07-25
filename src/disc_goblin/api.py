@@ -124,6 +124,8 @@ def create_app(
     async def cancel(job_id: str) -> dict[str, str]:
         try:
             await service.cancel_job(job_id)
+        except KeyError as exc:
+            raise HTTPException(404, "Job not found") from exc
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from exc
         return {"status": "cancelling"}
@@ -152,7 +154,9 @@ def create_app(
             await service.eject_drive(drive_id)
         except KeyError as exc:
             raise HTTPException(404, "Drive not found") from exc
-        return {"status": "ejected"}
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        return {"status": "tray_opened"}
 
     @app.post("/api/drives/{drive_id}/firmware/audit")
     async def audit_firmware(drive_id: str) -> dict[str, Any]:
