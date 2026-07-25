@@ -27,6 +27,14 @@ ACTIVE_STATUSES = {"scanning", "queued", "ripping", "publishing"}
 TERMINAL_STATUSES = {"complete", "failed", "cancelled"}
 
 
+def stage_bytes(stage: Path) -> int:
+    total = 0
+    for candidate in stage.glob("*.mkv"):
+        with suppress(OSError):
+            total += candidate.stat().st_size
+    return total
+
+
 class RipperService:
     def __init__(
         self,
@@ -449,13 +457,36 @@ class RipperService:
         )
         await self.broadcast()
         for offset, title in enumerate(selected_titles):
+            reported_value = 0.0
 
             async def report(value: float, message: str, *, current: int = offset) -> None:
-                overall = (current + value) / len(selected_titles)
+                nonlocal reported_value
+                measured = max(0.0, min(1.0, value))
+                if measured <= reported_value:
+                    return
+                reported_value = measured
+                overall = (current + reported_value) / len(selected_titles)
                 self.database.update_job(job_id, progress=round(overall, 4))
                 await self.broadcast()
 
-            output = await self.backend.rip_title(drive.device, title.index, stage, report)
+            baseline_bytes = stage_bytes(stage)
+            rip_task = asyncio.create_task(
+                self.backend.rip_title(drive.device, title.index, stage, report),
+                name=f"makemkv-{job_id}-{title.index}",
+            )
+            try:
+                while not rip_task.done():
+                    await asyncio.wait({rip_task}, timeout=2)
+                    if title.size_bytes > 0:
+                        written = max(0, stage_bytes(stage) - baseline_bytes)
+                        await report(min(0.995, written / title.size_bytes), "Ripping title")
+                output = await rip_task
+            finally:
+                if not rip_task.done():
+                    rip_task.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await rip_task
+            await report(1.0, "Finished title")
             self.database.execute(
                 "UPDATE titles SET ripped_path=? WHERE job_id=? AND title_index=?",
                 (str(output), job_id, title.index),

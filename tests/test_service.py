@@ -6,7 +6,15 @@ import pytest
 from disc_goblin.config import Settings
 from disc_goblin.db import Database
 from disc_goblin.makemkv import SimulationBackend
-from disc_goblin.service import RipperService
+from disc_goblin.service import RipperService, stage_bytes
+
+
+def test_stage_bytes_counts_growing_mkv_files(tmp_path: Path) -> None:
+    (tmp_path / "title-1.mkv").write_bytes(b"a" * 20)
+    (tmp_path / "title-2.mkv").write_bytes(b"b" * 30)
+    (tmp_path / "ignored.txt").write_bytes(b"c" * 100)
+
+    assert stage_bytes(tmp_path) == 50
 
 
 @pytest.mark.asyncio

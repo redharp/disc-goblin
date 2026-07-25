@@ -23,6 +23,7 @@ services:
       context: .
     image: disc-goblin:local
     container_name: disc-goblin
+    init: true
     restart: unless-stopped
     privileged: true
     depends_on:
