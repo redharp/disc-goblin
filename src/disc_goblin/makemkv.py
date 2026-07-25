@@ -179,6 +179,11 @@ def parse_titles(output: str) -> list[TitleInfo]:
     return sorted(rows.values(), key=lambda item: item.index)
 
 
+def successful_title_scan(output: str) -> bool:
+    """Return true when robot output proves a title scan completed successfully."""
+    return "Operation successfully completed" in output and bool(parse_titles(output))
+
+
 def fingerprint_disc(disc_name: str, titles: list[TitleInfo]) -> str:
     signature = "|".join(
         f"{title.index}:{title.duration_seconds}:{title.size_bytes}:{title.playlist}"
@@ -228,7 +233,12 @@ class MakeMKVBackend:
         self.binary = binary
         self.sdf_path = sdf_path
 
-    async def _capture(self, *arguments: str, allow_failure: bool = False) -> str:
+    async def _capture(
+        self,
+        *arguments: str,
+        allow_failure: bool = False,
+        accept_successful_title_scan: bool = False,
+    ) -> str:
         try:
             process = await asyncio.create_subprocess_exec(
                 self.binary,
@@ -245,7 +255,8 @@ class MakeMKVBackend:
             await stop_process(process)
             raise
         output = stdout.decode(errors="replace")
-        if process.returncode and not allow_failure:
+        accepted_nonzero_scan = accept_successful_title_scan and successful_title_scan(output)
+        if process.returncode and not allow_failure and not accepted_nonzero_scan:
             tail = "\n".join(output.splitlines()[-12:])
             raise MakeMKVError(tail or f"MakeMKV exited with code {process.returncode}")
         return output
@@ -264,6 +275,7 @@ class MakeMKVBackend:
             "--noscan",
             "info",
             f"dev:{device}",
+            accept_successful_title_scan=True,
         )
         return parse_titles(output)
 

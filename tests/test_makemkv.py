@@ -1,4 +1,10 @@
-from disc_goblin.makemkv import choose_titles, fingerprint_disc, parse_drives, parse_titles
+from disc_goblin.makemkv import (
+    choose_titles,
+    fingerprint_disc,
+    parse_drives,
+    parse_titles,
+    successful_title_scan,
+)
 
 ROBOT_OUTPUT = """
 MSG:1005,0,1,"MakeMKV v1.18.4 linux(x64-release) started","%1 started","MakeMKV"
@@ -17,6 +23,13 @@ TINFO:1,9,0,"0:22:00"
 TINFO:1,11,0,"7200000000"
 TINFO:1,16,0,"00120.mpls"
 TINFO:1,27,0,"DUNE_PART_TWO_t01.mkv"
+"""
+
+SUCCESSFUL_SCAN_WITH_WARNINGS = """
+TINFO:0,2,0,"MainFeature"
+TINFO:0,9,0,"2:46:00"
+MSG:3025,16777216,3,"Short title was skipped","Title skipped","00021.m2ts"
+MSG:5011,0,0,"Operation successfully completed","Operation successfully completed"
 """
 
 
@@ -59,3 +72,9 @@ def test_fingerprint_is_stable() -> None:
     titles = parse_titles(ROBOT_OUTPUT)
     assert fingerprint_disc("DUNE", titles) == fingerprint_disc("DUNE", titles)
     assert fingerprint_disc("DUNE", titles) != fingerprint_disc("DUNE_2", titles)
+
+
+def test_successful_title_scan_requires_completion_and_title_data() -> None:
+    assert successful_title_scan(SUCCESSFUL_SCAN_WITH_WARNINGS) is True
+    assert successful_title_scan('MSG:5011,0,0,"Operation successfully completed"') is False
+    assert successful_title_scan('TINFO:0,2,0,"MainFeature"') is False
