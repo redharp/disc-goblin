@@ -40,6 +40,32 @@ BD raw data read: Yes
 BD raw metadata read: Yes
 """
 
+SDF_TOOL_INFO = """
+[Drive Specific SDF] Embedded Info Strings:
+8000:LibreDrive Information
+8013:Status
+8105:Enabled
+8001:Drive platform
+:MT1959
+8002:Firmware type
+8107:Patched (microcode access re-enabled)
+8003:Firmware version
+:1.03
+8006:BD raw data read
+8100:Yes
+8007:BD raw metadata read
+8100:Yes
+8009:Unrestricted read speed
+8100:Yes
+
+[Identification SDF] Embedded Info Strings:
+8000:LibreDrive Information
+8013:Status
+8102:Possible, not yet enabled
+8001:Drive platform
+:MT1959
+"""
+
 
 def test_parse_firmware_and_classify_flash_possible() -> None:
     info = parse_firmware_info(LG_INFO)
@@ -51,6 +77,20 @@ def test_parse_firmware_and_classify_flash_possible() -> None:
 def test_non_uhd_pioneer_is_never_generic_flash_candidate() -> None:
     info = parse_firmware_info(PIONEER_INFO)
     assert info.uhd_status == "audit_only"
+
+
+def test_parse_firmware_tool_prefers_drive_specific_sdf() -> None:
+    info = parse_firmware_info(
+        SDF_TOOL_INFO,
+        manufacturer="HL-DT-ST",
+        product="BD-RE BU40N",
+        revision="1.03",
+    )
+    assert info.platform == "MT1959"
+    assert info.firmware_version == "1.03"
+    assert info.libredrive_status == "Enabled"
+    assert info.bd_raw_data_read is True
+    assert info.uhd_status == "ready"
 
 
 def test_manifest_requires_exact_identity_and_payload_hash(tmp_path: Path) -> None:

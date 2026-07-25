@@ -74,7 +74,49 @@ def _yes(value: str) -> bool:
     return value.strip().casefold() == "yes"
 
 
-def parse_firmware_info(output: str) -> FirmwareInfo:
+def _parse_sdf_info(output: str) -> dict[str, str]:
+    sections: dict[str, dict[str, str]] = {
+        "drive": {},
+        "identification": {},
+    }
+    section = ""
+    pending_key = ""
+    for raw_line in output.splitlines():
+        line = raw_line.strip()
+        if line == "[Drive Specific SDF] Embedded Info Strings:":
+            section = "drive"
+            pending_key = ""
+            continue
+        if line == "[Identification SDF] Embedded Info Strings:":
+            section = "identification"
+            pending_key = ""
+            continue
+        if line.startswith("["):
+            section = ""
+            pending_key = ""
+            continue
+        if not section:
+            continue
+        match = re.match(r"^(\d{4})?:(.*)$", line)
+        if not match:
+            continue
+        code, value = match.groups()
+        value = value.strip()
+        if code and code.startswith("80"):
+            pending_key = "" if code == "8000" else value.casefold()
+        elif pending_key and ((code and code.startswith("81")) or not code):
+            sections[section][pending_key] = value
+            pending_key = ""
+    return sections["drive"] or sections["identification"]
+
+
+def parse_firmware_info(
+    output: str,
+    *,
+    manufacturer: str = "",
+    product: str = "",
+    revision: str = "",
+) -> FirmwareInfo:
     values: dict[str, str] = {}
     libre_values: dict[str, str] = {}
     in_libredrive = False
@@ -93,10 +135,12 @@ def parse_firmware_info(output: str) -> FirmwareInfo:
         target = libre_values if in_libredrive else values
         target[key.casefold()] = value
 
+    sdf_values = _parse_sdf_info(output)
+    libre_values.update(sdf_values)
     info = FirmwareInfo(
-        manufacturer=values.get("manufacturer", ""),
-        product=values.get("product", ""),
-        revision=values.get("revision", ""),
+        manufacturer=values.get("manufacturer", manufacturer),
+        product=values.get("product", product),
+        revision=values.get("revision", revision),
         serial=values.get("serial number", ""),
         firmware_date=values.get("firmware date", ""),
         platform=libre_values.get("drive platform", ""),

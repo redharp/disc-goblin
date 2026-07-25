@@ -42,7 +42,11 @@ def create_app(
     settings = settings or Settings.from_env()
     database = Database(settings.database_url)
     if backend is None:
-        backend = SimulationBackend() if settings.simulate else MakeMKVBackend(settings.makemkv_bin)
+        backend = (
+            SimulationBackend()
+            if settings.simulate
+            else MakeMKVBackend(settings.makemkv_bin, settings.sdf_path)
+        )
     service = RipperService(settings, database, backend)
 
     @asynccontextmanager

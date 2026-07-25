@@ -191,8 +191,13 @@ def choose_titles(
 
 
 class MakeMKVBackend:
-    def __init__(self, binary: str = "makemkvcon"):
+    def __init__(
+        self,
+        binary: str = "makemkvcon",
+        sdf_path: Path | None = None,
+    ):
         self.binary = binary
+        self.sdf_path = sdf_path
 
     async def _capture(self, *arguments: str, allow_failure: bool = False) -> str:
         try:
@@ -284,8 +289,25 @@ class MakeMKVBackend:
         await process.wait()
 
     async def firmware_info(self, device: str) -> FirmwareInfo:
-        output = await self._capture("f", "-d", device, "--info")
-        return parse_firmware_info(output)
+        arguments = ["f"]
+        if self.sdf_path:
+            arguments.extend(["-f", str(self.sdf_path)])
+        arguments.extend(["-d", device, "--info"])
+        output = await self._capture(*arguments)
+        sysfs = Path("/sys/class/block") / Path(device).name / "device"
+
+        def read_identity(name: str) -> str:
+            try:
+                return (sysfs / name).read_text(encoding="utf-8").strip()
+            except OSError:
+                return ""
+
+        return parse_firmware_info(
+            output,
+            manufacturer=read_identity("vendor"),
+            product=read_identity("model"),
+            revision=read_identity("rev"),
+        )
 
     async def flash_firmware(
         self,
