@@ -54,6 +54,10 @@ Point `DISC_GOBLIN_LIBRARY_HOST_PATH` at that host path. Staging is kept below
 the library root at `.disc-goblin-staging`, so publishing is normally an atomic
 rename on the same filesystem.
 
+Set `DISC_GOBLIN_MOVIE_ROOT` and `DISC_GOBLIN_TV_ROOT` to the movie and
+television directories inside that mounted filesystem. They may use different
+names or casing, but should remain on the same filesystem as the staging root.
+
 For the current proxius home lab, do **not** map either of these existing
 `fr0gz9ripper` mounts as the write target:
 
@@ -75,6 +79,8 @@ Set at least:
 
 ```dotenv
 DISC_GOBLIN_LIBRARY_HOST_PATH=/path/to/writable/media
+DISC_GOBLIN_MOVIE_ROOT=/media/library/movies
+DISC_GOBLIN_TV_ROOT=/media/library/tv
 DISC_GOBLIN_MAKEMKV_KEY=your-current-key
 DISC_GOBLIN_TMDB_TOKEN=your-optional-tmdb-v4-read-token
 POSTGRES_PASSWORD=replace-this-with-a-long-random-password

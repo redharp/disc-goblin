@@ -15,6 +15,8 @@ def _bool(name: str, default: bool) -> bool:
 @dataclass(slots=True)
 class Settings:
     library_root: Path = Path("/media/library")
+    movie_root: Path = Path("/media/library/Movies")
+    tv_root: Path = Path("/media/library/TV")
     database_url: str = "postgresql+psycopg://disc_goblin:disc_goblin@localhost:5432/disc_goblin"
     poll_interval: float = 8.0
     auto_rip: bool = True
@@ -40,8 +42,21 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> Settings:
+        library_root = Path(os.getenv("DISC_GOBLIN_LIBRARY_ROOT", "/media/library")).expanduser()
         return cls(
-            library_root=Path(os.getenv("DISC_GOBLIN_LIBRARY_ROOT", "/media/library")).expanduser(),
+            library_root=library_root,
+            movie_root=Path(
+                os.getenv(
+                    "DISC_GOBLIN_MOVIE_ROOT",
+                    str(library_root / "Movies"),
+                )
+            ).expanduser(),
+            tv_root=Path(
+                os.getenv(
+                    "DISC_GOBLIN_TV_ROOT",
+                    str(library_root / "TV"),
+                )
+            ).expanduser(),
             database_url=os.getenv(
                 "DISC_GOBLIN_DATABASE_URL",
                 "postgresql+psycopg://disc_goblin:disc_goblin@localhost:5432/disc_goblin",

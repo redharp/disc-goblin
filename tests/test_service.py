@@ -13,6 +13,8 @@ from disc_goblin.service import RipperService
 async def test_simulated_disc_rips_then_waits_for_safe_publish(tmp_path: Path) -> None:
     settings = Settings(
         library_root=tmp_path / "library",
+        movie_root=tmp_path / "library" / "Movies",
+        tv_root=tmp_path / "library" / "TV",
         database_url=f"sqlite:///{tmp_path / 'service.db'}",
         poll_interval=999,
         eject_on_success=False,
@@ -49,5 +51,5 @@ async def test_simulated_disc_rips_then_waits_for_safe_publish(tmp_path: Path) -
         selected_title_ids=selected,
     )
     assert published["status"] == "complete"
-    destination = settings.library_root / "Dune Part Two (2024)" / "Dune Part Two (2024).mkv"
+    destination = settings.movie_root / "Dune Part Two (2024)" / "Dune Part Two (2024).mkv"
     assert destination.is_file()

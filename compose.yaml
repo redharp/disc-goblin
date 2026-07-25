@@ -44,6 +44,8 @@ services:
       DISC_GOBLIN_UDEV_DISCOVERY: "${DISC_GOBLIN_UDEV_DISCOVERY:-true}"
       DISC_GOBLIN_FIRMWARE_AUDIT: "${DISC_GOBLIN_FIRMWARE_AUDIT:-true}"
       DISC_GOBLIN_AUTO_FLASH: "${DISC_GOBLIN_AUTO_FLASH:-false}"
+      DISC_GOBLIN_MOVIE_ROOT: "${DISC_GOBLIN_MOVIE_ROOT:-/media/library/Movies}"
+      DISC_GOBLIN_TV_ROOT: "${DISC_GOBLIN_TV_ROOT:-/media/library/TV}"
     volumes:
       - ./config:/config
       - /dev:/dev

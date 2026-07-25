@@ -77,6 +77,8 @@ def create_app(
             "version": __version__,
             "simulation": settings.simulate,
             "library_root": str(settings.library_root),
+            "movie_root": str(settings.movie_root),
+            "tv_root": str(settings.tv_root),
             "database": "postgresql"
             if settings.database_url.startswith("postgresql")
             else "sqlite",

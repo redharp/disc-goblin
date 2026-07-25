@@ -54,6 +54,8 @@ class RipperService:
     async def start(self) -> None:
         self.database.initialize()
         self.settings.library_root.mkdir(parents=True, exist_ok=True)
+        self.settings.movie_root.mkdir(parents=True, exist_ok=True)
+        self.settings.tv_root.mkdir(parents=True, exist_ok=True)
         self.settings.staging_root.mkdir(parents=True, exist_ok=True)
         self._watcher = asyncio.create_task(self._watch_loop(), name="disc-watcher")
         if self.settings.udev_discovery:
@@ -445,7 +447,7 @@ class RipperService:
             if job["media_type"] == "tv":
                 episode = int(job["episode_start"] or 1) + index
                 destination = tv_destination(
-                    self.settings.library_root,
+                    self.settings.tv_root,
                     show=job["title"],
                     year=job["year"],
                     season=int(job["season"] or 1),
@@ -454,7 +456,7 @@ class RipperService:
                 )
             elif index == 0:
                 destination = movie_destination(
-                    self.settings.library_root,
+                    self.settings.movie_root,
                     title=job["title"],
                     year=job["year"],
                     edition=job["edition"],
@@ -462,7 +464,7 @@ class RipperService:
             else:
                 extra_name = title["name"] or f"Title {title['title_index']:02d}"
                 destination = movie_destination(
-                    self.settings.library_root,
+                    self.settings.movie_root,
                     title=job["title"],
                     year=job["year"],
                     extra_name=extra_name,

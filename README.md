@@ -127,6 +127,8 @@ Important knobs:
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `DISC_GOBLIN_LIBRARY_ROOT` | `/media/library` | Final library and same-filesystem staging root |
+| `DISC_GOBLIN_MOVIE_ROOT` | `/media/library/Movies` | Plex/Jellyfin movie destination |
+| `DISC_GOBLIN_TV_ROOT` | `/media/library/TV` | Plex/Jellyfin television destination |
 | `DISC_GOBLIN_DATABASE_URL` | PostgreSQL DSN | Durable app state |
 | `DISC_GOBLIN_RIP_MODE` | `smart` | `smart`, `main_feature`, or `all` |
 | `DISC_GOBLIN_MIN_TITLE_SECONDS` | `1200` | Ignore short menus/trailers in automatic selection |
