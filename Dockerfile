@@ -12,6 +12,7 @@ RUN apk add --no-cache \
       eudev-libs \
       openjdk21-jre-headless \
       util-linux-misc \
+    && ln -s /usr/lib/libudev.so.1 /usr/lib/libudev.so \
     && mkdir -p /opt/makemkv/appdata \
     && tar -xf /opt/makemkv/share/MakeMKV/appdata.tar -C /opt/makemkv/appdata \
     && ln -s "$(find /opt/makemkv/appdata -name 'sdf_*.bin' -print -quit)" \

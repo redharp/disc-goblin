@@ -12,11 +12,12 @@ def optical_media_labels() -> dict[str, str]:
 
     try:
         import pyudev
-    except ImportError:
+
+        context = pyudev.Context()
+    except (ImportError, OSError):
         return {}
 
     labels: dict[str, str] = {}
-    context = pyudev.Context()
     for device in context.list_devices(subsystem="block"):
         name = device.device_node or ""
         if not name.startswith("/dev/sr"):
@@ -35,11 +36,12 @@ async def optical_hotplug_events() -> AsyncIterator[str]:
 
     try:
         import pyudev
-    except ImportError:
+
+        context = pyudev.Context()
+    except (ImportError, OSError):
         while True:
             await asyncio.sleep(3600)
 
-    context = pyudev.Context()
     monitor = pyudev.Monitor.from_netlink(context)
     monitor.filter_by(subsystem="block")
     monitor.start()
