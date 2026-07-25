@@ -1,0 +1,9 @@
+.git
+.github
+.venv
+.pytest_cache
+data
+library
+tests
+*.md
+!README.md

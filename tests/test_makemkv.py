@@ -1,0 +1,61 @@
+from disc_goblin.makemkv import choose_titles, fingerprint_disc, parse_drives, parse_titles
+
+ROBOT_OUTPUT = """
+MSG:1005,0,1,"MakeMKV v1.18.4 linux(x64-release) started","%1 started","MakeMKV"
+DRV:0,2,999,1,"PIONEER BD-RW BDR-212U 1.02","DUNE_PART_TWO_2024_UHD","/dev/sr0"
+DRV:1,2,999,0,"HL-DT-ST BD-RE WH16NS60 1.03","","/dev/sr1"
+DRV:2,256,999,0,"","",""
+TINFO:0,2,0,"MainFeature"
+TINFO:0,8,0,"17"
+TINFO:0,9,0,"2:46:00"
+TINFO:0,11,0,"81250000000"
+TINFO:0,16,0,"00800.mpls"
+TINFO:0,27,0,"DUNE_PART_TWO_t00.mkv"
+TINFO:1,30,0,"Creating the Impossible"
+TINFO:1,8,0,"6"
+TINFO:1,9,0,"0:22:00"
+TINFO:1,11,0,"7200000000"
+TINFO:1,16,0,"00120.mpls"
+TINFO:1,27,0,"DUNE_PART_TWO_t01.mkv"
+"""
+
+
+def test_parse_drive_inventory() -> None:
+    drives = parse_drives(ROBOT_OUTPUT)
+    assert len(drives) == 2
+    assert drives[0].disc_name == "DUNE_PART_TWO_2024_UHD"
+    assert drives[0].state == "ready"
+    assert drives[1].state == "empty"
+    assert drives[0].id.startswith("drive-")
+
+
+def test_parse_title_metadata() -> None:
+    titles = parse_titles(ROBOT_OUTPUT)
+    assert len(titles) == 2
+    assert titles[0].duration_seconds == 9960
+    assert titles[0].size_bytes == 81_250_000_000
+    assert titles[0].playlist == "00800.mpls"
+    assert titles[1].name == "Creating the Impossible"
+
+
+def test_smart_mode_selects_movie_main_feature() -> None:
+    titles = parse_titles(ROBOT_OUTPUT)
+    selected = choose_titles(titles, min_seconds=1200, mode="smart")
+    assert [title.index for title in selected] == [0]
+    assert titles[0].selected is True
+    assert titles[1].selected is False
+
+
+def test_smart_mode_selects_episodic_cluster() -> None:
+    titles = parse_titles(ROBOT_OUTPUT)
+    for index, seconds in enumerate([2700, 2680, 2750, 2710]):
+        copy = type(titles[0])(index=index + 10, duration_seconds=seconds)
+        titles.append(copy)
+    selected = choose_titles(titles, min_seconds=1200, mode="smart")
+    assert {title.index for title in selected} == {10, 11, 12, 13}
+
+
+def test_fingerprint_is_stable() -> None:
+    titles = parse_titles(ROBOT_OUTPUT)
+    assert fingerprint_disc("DUNE", titles) == fingerprint_disc("DUNE", titles)
+    assert fingerprint_disc("DUNE", titles) != fingerprint_disc("DUNE_2", titles)

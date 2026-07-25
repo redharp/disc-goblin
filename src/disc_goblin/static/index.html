@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#090b0d" />
+    <meta
+      name="description"
+      content="Disc Goblin — automatic Blu-ray ingest with safe Plex and Jellyfin naming."
+    />
+    <title>Disc Goblin</title>
+    <link rel="stylesheet" href="/assets/styles.css" />
+    <script src="/assets/app.js" defer></script>
+  </head>
+  <body>
+    <div class="noise" aria-hidden="true"></div>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Disc Goblin home">
+        <span class="brand-mark" aria-hidden="true">
+          <span class="brand-hole"></span>
+        </span>
+        <span>
+          <strong>DISC GOBLIN</strong>
+          <small>OPTICAL INGEST UNIT</small>
+        </span>
+      </a>
+      <div class="topbar-actions">
+        <span id="socket-state" class="connection">
+          <i></i>
+          <span>Connecting</span>
+        </span>
+        <button id="scan-button" class="button button-quiet" type="button">
+          Scan drives
+        </button>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div>
+          <p class="eyebrow">PHYSICAL MEDIA, DOMESTICATED</p>
+          <h1>Feed it discs.<br /><em>Get a clean library.</em></h1>
+          <p class="hero-copy">
+            Blu-rays rip the moment they land. Disc Goblin stages every byte,
+            verifies the identity, and publishes media using Plex and Jellyfin-safe names.
+          </p>
+        </div>
+        <div class="hero-orbit" aria-hidden="true">
+          <div class="orbit orbit-one"></div>
+          <div class="orbit orbit-two"></div>
+          <div class="disc">
+            <div class="disc-shine"></div>
+            <div class="disc-ring"></div>
+            <div class="disc-hole"></div>
+          </div>
+          <span class="orbit-label label-a">SCAN</span>
+          <span class="orbit-label label-b">RIP</span>
+          <span class="orbit-label label-c">NAME</span>
+        </div>
+      </section>
+
+      <section class="metrics" aria-label="Library stats">
+        <article>
+          <span>DRIVES ONLINE</span>
+          <strong id="metric-drives">—</strong>
+          <small id="metric-drives-note">Looking for hardware</small>
+        </article>
+        <article>
+          <span>ACTIVE INGESTS</span>
+          <strong id="metric-active">—</strong>
+          <small>Across every connected drive</small>
+        </article>
+        <article>
+          <span>COMPLETED</span>
+          <strong id="metric-complete">—</strong>
+          <small>Published to your library</small>
+        </article>
+        <article>
+          <span>NEEDS A HUMAN</span>
+          <strong id="metric-review">—</strong>
+          <small>Safe in staging, never misfiled</small>
+        </article>
+      </section>
+
+      <section class="section" aria-labelledby="drives-heading">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">HARDWARE DECK</p>
+            <h2 id="drives-heading">Connected drives</h2>
+          </div>
+          <span id="drive-summary" class="section-note">Discovering optical hardware…</span>
+        </div>
+        <div id="drive-grid" class="drive-grid" aria-live="polite">
+          <div class="skeleton-card"></div>
+          <div class="skeleton-card"></div>
+        </div>
+      </section>
+
+      <section class="section" aria-labelledby="queue-heading">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">LIVE FLOOR</p>
+            <h2 id="queue-heading">Ingest queue</h2>
+          </div>
+          <span class="section-note">Staged first. Published only when clean.</span>
+        </div>
+        <div id="queue" class="queue" aria-live="polite"></div>
+      </section>
+
+      <section class="section history-section" aria-labelledby="history-heading">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">THE LEDGER</p>
+            <h2 id="history-heading">Rip history</h2>
+          </div>
+          <span class="section-note">Last 50 jobs</span>
+        </div>
+        <div class="history-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Media</th>
+                <th>Disc</th>
+                <th>Status</th>
+                <th>Destination</th>
+                <th>When</th>
+                <th><span class="sr-only">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody id="history-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <span>DISC GOBLIN / MAKE IT MKV. KEEP IT CLEAN.</span>
+      <span id="footer-library">Library path loading…</span>
+    </footer>
+
+    <dialog id="review-dialog">
+      <form id="review-form" method="dialog">
+        <div class="dialog-head">
+          <div>
+            <p class="eyebrow">IDENTITY CHECK</p>
+            <h2>Name this rip</h2>
+          </div>
+          <button class="icon-button" value="cancel" aria-label="Close dialog">×</button>
+        </div>
+        <p class="dialog-copy">
+          The files are already safe in staging. Confirm this once and Disc Goblin
+          will publish them into the exact layout your media server expects.
+        </p>
+        <input id="review-job-id" type="hidden" />
+        <div class="type-switch" role="radiogroup" aria-label="Media type">
+          <label>
+            <input type="radio" name="media_type" value="movie" checked />
+            <span>Movie</span>
+          </label>
+          <label>
+            <input type="radio" name="media_type" value="tv" />
+            <span>TV / Episodes</span>
+          </label>
+        </div>
+        <div class="field-grid">
+          <label class="field field-wide">
+            <span>Title</span>
+            <input id="review-title" name="title" required maxlength="180" />
+          </label>
+          <label class="field">
+            <span>Year</span>
+            <input id="review-year" name="year" type="number" min="1888" max="2200" />
+          </label>
+          <label class="field movie-only">
+            <span>Edition <i>optional</i></span>
+            <input
+              id="review-edition"
+              name="edition"
+              placeholder="Director's Cut"
+              maxlength="120"
+            />
+          </label>
+          <label class="field tv-only">
+            <span>Season</span>
+            <input id="review-season" name="season" type="number" min="0" value="1" />
+          </label>
+          <label class="field tv-only">
+            <span>First episode</span>
+            <input
+              id="review-episode"
+              name="episode_start"
+              type="number"
+              min="0"
+              value="1"
+            />
+          </label>
+        </div>
+        <fieldset class="title-picker">
+          <legend>Titles to publish</legend>
+          <div id="review-titles"></div>
+        </fieldset>
+        <div id="review-error" class="form-error" role="alert"></div>
+        <div class="dialog-actions">
+          <button class="button button-quiet" value="cancel">Keep staged</button>
+          <button id="publish-button" class="button button-primary" type="submit">
+            Confirm &amp; publish
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  </body>
+</html>

@@ -1,0 +1,8 @@
+# Optional least-privilege override. Device pairs are host-specific; discover
+# them with `lsscsi -g` and list every /dev/sr* + matching /dev/sg* pair.
+services:
+  disc-goblin:
+    privileged: false
+    devices:
+      - /dev/sr0:/dev/sr0
+      - /dev/sg1:/dev/sg1
